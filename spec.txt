@@ -1,0 +1,303 @@
+Design Spec 04 — tpt-nova-sim
+Project: tpt-nova-sim
+Role: Simulation-specific runtime extensions for tpt-nova
+Layer: Layer 5 (Domain Extension)
+License: MIT
+Dependency policy: No Apache-only dependencies
+Status: Draft v0.1
+Primary target: Linux-first, cross-platform by construction
+1. Summary
+tpt-nova-sim is the simulation domain extension for tpt-nova.
+While tpt-nova-games focuses on player experience, input, and entertainment, tpt-nova-sim focuses on determinism, data fidelity, sensor modeling, and AI training.
+It transforms tpt-nova from a game runtime into a high-fidelity digital twin and synthetic data generation platform. This is where your work on tpt-flight-control, tpt-astrobus, and tpt-tessera converges with the core engine.
+What It Provides
+Deterministic, rewindable, and variable-rate time management.
+Synthetic sensor models (LiDAR, radar, camera, IMU, GPS).
+Frame-perfect event logging, replay, and rollback systems.
+AI/RL environment wrappers (OpenAI Gymnasium-compatible interfaces).
+Real-world time-series data ingestion and binding.
+Robotics kinematics and multi-agent coordination primitives.
+What It Does NOT Provide
+Game UI, player input, or entertainment-specific logic (that's tpt-nova-games).
+Heavy CAD/BIM rendering or architectural measurement tools (that's tpt-nova-viz).
+The core physics engine (that's tpt-kinetix).
+The build pipeline (that's tpt-vectis).
+2. Naming Rule
+Every crate in the tpt-nova-sim workspace must start with:
+tpt-nova-sim-
+Except the root facade crate:
+tpt-nova-sim
+Valid examples:
+tpt-nova-sim
+tpt-nova-sim-time
+tpt-nova-sim-sensors
+tpt-nova-sim-replay
+tpt-nova-sim-agents
+tpt-nova-sim-datasets
+
+Invalid examples:
+nova-sim-time
+sim-replay
+tpt-simulation
+
+3. Architectural Position
+tpt-vectis (toolchain)
+  ↓ builds simulation assets/drivers for
+tpt-nova (core runtime)
+  ↓ extended by
+tpt-nova-sim (THIS REPO)
+  ↓ used by
+  digital twins, robotics simulators, AI training environments, scientific models
+
+Dependency Direction
+tpt-nova-sim DEPENDS ON:
+  - tpt-nova (core ECS, scheduler, rendering abstraction)
+  - tpt-kinetix (physics, rigid body dynamics)
+  - tpt-math (vectors, quaternions, transforms)
+  - tpt-anima (optional, for advanced agent reasoning)
+
+tpt-nova-sim DOES NOT DEPEND ON:
+  - tpt-nova-games (sibling domain)
+  - tpt-nova-viz (sibling domain)
+  - tpt-vectis (build-time only)
+
+4. Core Subsystems
+4.1. tpt-nova-sim-time
+Deterministic and manipulable time management.
+Components
+pub struct SimTime {
+    pub current_tick: u64,
+    pub tick_duration: Duration, // e.g., 16.66ms for 60Hz, or 10ms for 100Hz
+    pub time_scale: f32,         // 0.0 = pause, 1.0 = real-time, 10.0 = 10x speed
+    pub is_rewinding: bool,
+}
+
+pub struct TimeAnchor {
+    pub entity: Entity,
+    pub local_time_scale: f32, // For relativistic or localized time effects
+}
+
+Systems
+sim_time_step_system — advances the global simulation tick deterministically.
+time_scale_system — applies time dilation to specific entities or the whole world.
+Drivers
+time_step_driver — hot-swappable stepping logic (fixed, variable, adaptive).
+rewind_driver — hot-swappable state restoration logic for time reversal.
+Features
+Absolute determinism (same seed + same inputs = identical state).
+Pause, slow-motion, and fast-forward without breaking physics.
+Frame-perfect rewind capability (powered by tpt-nova-sim-replay).
+4.2. tpt-nova-sim-sensors
+Synthetic sensor modeling for robotics and autonomous systems.
+Components
+pub struct LidarSensor {
+    pub position: Vec3,
+    pub orientation: Quat,
+    pub scan_rate_hz: f32,
+    pub max_range: f32,
+    pub angular_resolution: f32,
+    pub noise_model: SensorNoise,
+    pub last_scan: Option<PointCloudId>,
+}
+
+pub struct CameraSensor {
+    pub position: Vec3,
+    pub orientation: Quat,
+    pub fov: f32,
+    pub resolution: (u32, u32),
+    pub output_format: ImageFormat, // RGB, Depth, Segmentation, Normal
+}
+
+pub struct ImuSensor {
+    pub position: Vec3,
+    pub orientation: Quat,
+    pub accel_noise: Vec3,
+    pub gyro_noise: Vec3,
+    pub last_reading: ImuReading,
+}
+
+Systems
+sensor_poll_system — triggers sensor updates based on simulation time, not wall-clock time.
+sensor_noise_system — applies configurable Gaussian or realistic noise models to raw data.
+sensor_render_system — hooks into tpt-nova rendering to generate depth/segmentation masks.
+Drivers
+lidar_ray_cast_driver — hot-swappable raycasting backend (CPU multithreaded vs. GPU compute).
+sensor_noise_driver — hot-swappable noise injection (e.g., swapping simple Gaussian for realistic weather-based degradation).
+Features
+Ground-truth data extraction (perfect depth, segmentation masks).
+Realistic sensor degradation (rain, fog, lens flare, IMU drift).
+Decoupled update rates (e.g., camera at 30Hz, IMU at 1000Hz, physics at 60Hz).
+(Self-correction during drafting: Ensure we don't duplicate tpt-kinetix physics. Sensors just query the world state or render passes; they don't simulate the physics themselves.)
+4.3. tpt-nova-sim-replay
+Deterministic event logging and playback.
+Components
+pub struct ReplayRecorder {
+    pub is_recording: bool,
+    pub output_path: PathBuf,
+    pub compression: CompressionLevel,
+}
+
+pub struct ReplayPlayer {
+    pub is_playing: bool,
+    pub playback_speed: f32,
+    pub current_tick: u64,
+    pub total_ticks: u64,
+    pub log_reader: Arc<LogReader>,
+}
+
+Systems
+replay_record_system — serializes entity state deltas and input events to disk.
+replay_playback_system — deserializes and injects state/inputs back into the ECS, bypassing normal system execution.
+Drivers
+replay_storage_driver — hot-swappable storage backend (local file, network stream, in-memory ring buffer).
+replay_injection_driver — hot-swappable logic for how recorded data overrides live simulation state.
+Features
+Bit-for-bit deterministic replay.
+"Ghost" playback (running the replay alongside a live simulation for A/B testing).
+Seek-to-tick functionality.
+4.4. tpt-nova-sim-agents
+AI training and multi-agent coordination primitives.
+Components
+pub struct RlAgent {
+    pub policy_id: PolicyId,
+    pub observation_space: ObservationSpec,
+    pub action_space: ActionSpec,
+    pub cumulative_reward: f32,
+    pub is_done: bool,
+}
+
+pub struct BehaviorTree {
+    pub root_node: NodeId,
+    pub blackboard: Blackboard,
+    pub current_state: BtState,
+}
+
+Systems
+agent_observe_system — gathers environment state into observation tensors.
+agent_act_system — applies actions from the policy to the entity's components.
+agent_reward_system — calculates reward signals based on custom domain logic.
+Drivers
+policy_inference_driver — hot-swappable inference backend (e.g., tpt-crucible compiled model, ONNX runtime, or a mock random policy for testing).
+behavior_tree_eval_driver — hot-swappable BT execution logic.
+Features
+Gymnasium-compatible observation/action spaces.
+Seamless swapping of trained policies at runtime via tpt-nova-drivers.
+Multi-agent reward shaping.
+4.5. tpt-nova-sim-datasets
+Real-world data ingestion and binding.
+Components
+pub struct TimeSeriesSource {
+    pub uri: String, // e.g., "parquet://local/data.telemetry"
+    pub time_column: String,
+    pub current_row: usize,
+    pub is_streaming: bool,
+}
+
+pub struct DataBinding {
+    pub source_entity: Entity,
+    pub target_component: ComponentId,
+    pub mapping: HashMap<String, String>, // source column -> target field
+}
+
+Systems
+dataset_stream_system — asynchronously streams chunks of data from disk/network.
+data_bind_system — maps incoming data rows to ECS components in real-time.
+Drivers
+dataset_reader_driver — hot-swappable file format reader (CSV, Parquet, ROS bag).
+Features
+Hardware-in-the-loop (HIL) testing by streaming real sensor data into the sim.
+Synchronized playback of multiple data streams.
+5. Integration with tpt-nova-drivers
+The simulation domain heavily relies on dynamic drivers for rapid experimentation.
+Example: Hot-Swapping a Sensor Model
+// Default: Fast, low-fidelity CPU raycast for rapid iteration
+pub struct LowFidelityLidarDriver;
+impl Driver for LowFidelityLidarDriver { /* ... */ }
+
+// Upgraded: High-fidelity GPU compute shader raycast for final validation
+pub struct HighFidelityLidarDriver;
+impl Driver for HighFidelityLidarDriver { /* ... */ }
+
+// At runtime, an AI agent or developer can swap this without restarting the sim:
+world.swap_driver::<LidarSensor>(HighFidelityLidarDriver);
+
+Example: Self-Debugging an Agent
+If an RL agent gets stuck in a loop, tpt-nova-drivers + tpt-eve can:
+Detect the anomaly (reward flatlining, position oscillating).
+Generate a new BehaviorTree or tweak the RlAgent reward function.
+Compile it as a new driver.
+Hot-swap it into the running simulation to test the fix immediately.
+6. Domain Manifest
+tpt-nova-sim provides its own Vectis domain manifest:
+# vectis-domain.toml
+
+[domain]
+name = "sim"
+crate = "tpt-nova-sim"
+version = "0.1.0"
+
+[schemas]
+components = "schemas/components.nova.json"
+events = "schemas/events.nova.json"
+
+[drivers]
+directory = "drivers"
+
+[assets]
+importers = ["urdf", "point_cloud", "parquet", "rosbag", "sensor_calibration"]
+
+[compatibility]
+nova = ">=0.4.0,<0.6.0"
+
+7. Strict Dependency Policy
+License: MIT only
+Allowed: MIT, BSD-2-Clause, BSD-3-Clause, ISC, Zlib, BSL-1.0
+Banned: Apache-2.0 (unless dual-licensed with MIT), GPL-, AGPL-, LGPL-, MPL-, SSPL
+Specific Crate Choices
+Time-series data: arrow / parquet (Apache-2.0 is common here, so we must use a pure Rust MIT-licensed alternative like quick-csv or explicitly vendor/audit a permissible subset, or rely on tpt-media/custom parsers to stay strictly MIT. Correction: We will mandate custom or strictly MIT/BSD parsers for v0.1 to avoid the Apache trap in the data ecosystem).
+URDF/Robotics: Custom lightweight parser or strictly MIT XML parser (quick-xml is MIT).
+Math: tpt-math (internal), avoiding heavy nalgebra if its dependencies violate the strict policy, though nalgebra is generally Apache-2.0/MIT dual, so we can select MIT.
+8. Progress Tracking (todo.md)
+# tpt-nova-sim Progress
+
+## [ ] Layer 1: Deterministic Time
+- [ ] `SimTime` component and global tick advancement.
+- [ ] Time scale and pause/resume logic.
+- [ ] Unit tests for deterministic step consistency.
+
+## [ ] Layer 2: Replay & Logging
+- [ ] Event log serialization format.
+- [ ] `ReplayRecorder` system.
+- [ ] `ReplayPlayer` system with seek capability.
+
+## [ ] Layer 3: Synthetic Sensors
+- [ ] `LidarSensor` and `CameraSensor` components.
+- [ ] Basic CPU raycast sensor driver.
+- [ ] Sensor noise injection system.
+
+## [ ] Layer 4: AI & Agents
+- [ ] `RlAgent` observation/action space definitions.
+- [ ] `BehaviorTree` component and evaluation system.
+- [ ] Integration with `tpt-nova-drivers` for policy hot-swapping.
+
+## [ ] Layer 5: Datasets & Binding
+- [ ] `TimeSeriesSource` component.
+- [ ] MIT-licensed CSV/Parquet reader driver.
+- [ ] Data-to-component binding system.
+
+9. Success Criteria
+tpt-nova-sim is successful when:
+A simulation can run at 2x speed and produce the exact same final state as 1x speed (determinism verified).
+A recorded 60-second simulation can be played back, scrubbed, and rendered ident to the original run.
+A LiDAR sensor component can have its raycasting driver hot-swapped from CPU to GPU at runtime without crashing the ECS.
+An RL agent can receive observations and apply actions at a fixed 100Hz rate, independent of the render framerate.
+The entire crate dependency tree passes the strict no-Apache-only cargo-deny check.
+10. Non-Goals for v0.1
+Full ROS 2 / ROS 1 bridge (too heavy, start with simple data binding).
+Photorealistic sensor rendering (that's a tpt-nova-viz or advanced rendering concern; v0.1 focuses on geometric ground truth).
+Distributed multi-machine simulation (that's a future tpt-tessera runtime integration, not a core sim feature yet).
+
+
+
+
+
