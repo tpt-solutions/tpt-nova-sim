@@ -187,7 +187,7 @@ Multi-agent reward shaping.
 Real-world data ingestion and binding.
 Components
 pub struct TimeSeriesSource {
-    pub uri: String, // e.g., "parquet://local/data.telemetry"
+    pub uri: String, // e.g., "strata://local/data.telemetry"
     pub time_column: String,
     pub current_row: usize,
     pub is_streaming: bool,
@@ -203,7 +203,7 @@ Systems
 dataset_stream_system — asynchronously streams chunks of data from disk/network.
 data_bind_system — maps incoming data rows to ECS components in real-time.
 Drivers
-dataset_reader_driver — hot-swappable file format reader (CSV, Parquet, ROS bag).
+dataset_reader_driver — hot-swappable file format reader (CSV, tpt-strata, ROS bag).
 Features
 Hardware-in-the-loop (HIL) testing by streaming real sensor data into the sim.
 Synchronized playback of multiple data streams.
@@ -244,7 +244,7 @@ events = "schemas/events.nova.json"
 directory = "drivers"
 
 [assets]
-importers = ["urdf", "point_cloud", "parquet", "rosbag", "sensor_calibration"]
+importers = ["urdf", "point_cloud", "strata", "rosbag", "sensor_calibration"]
 
 [compatibility]
 nova = ">=0.4.0,<0.6.0"
@@ -254,7 +254,7 @@ License: MIT only
 Allowed: MIT, BSD-2-Clause, BSD-3-Clause, ISC, Zlib, BSL-1.0
 Banned: Apache-2.0 (unless dual-licensed with MIT), GPL-, AGPL-, LGPL-, MPL-, SSPL
 Specific Crate Choices
-Time-series data: arrow / parquet (Apache-2.0 is common here, so we must use a pure Rust MIT-licensed alternative like quick-csv or explicitly vendor/audit a permissible subset, or rely on tpt-media/custom parsers to stay strictly MIT. Correction: We will mandate custom or strictly MIT/BSD parsers for v0.1 to avoid the Apache trap in the data ecosystem).
+Time-series data: tpt-strata (first-party columnar format; replaces arrow/parquet, avoiding the Apache-only dependency trap). CSV via a strictly MIT/BSD parser.
 URDF/Robotics: Custom lightweight parser or strictly MIT XML parser (quick-xml is MIT).
 Math: tpt-math (internal), avoiding heavy nalgebra if its dependencies violate the strict policy, though nalgebra is generally Apache-2.0/MIT dual, so we can select MIT.
 8. Progress Tracking (todo.md)
@@ -282,7 +282,7 @@ Math: tpt-math (internal), avoiding heavy nalgebra if its dependencies violate t
 
 ## [ ] Layer 5: Datasets & Binding
 - [ ] `TimeSeriesSource` component.
-- [ ] MIT-licensed CSV/Parquet reader driver.
+- [ ] CSV and tpt-strata reader drivers.
 - [ ] Data-to-component binding system.
 
 9. Success Criteria

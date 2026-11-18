@@ -6,7 +6,7 @@ License: MIT OR Apache-2.0 · (c) TPT Solutions · Edition 2024 · Determinism: 
 - [ ] Naming check (all crates prefixed `tpt-nova-sim-`)
 - [ ] LICENSE-MIT, LICENSE-APACHE, per-crate `license = "MIT OR Apache-2.0"`, SPDX headers
 - [ ] README, CONTRIBUTING (dual-license contribution clause), CODE_OF_CONDUCT, SECURITY
-- [ ] Git deps on TPT-Solutions: tpt-nova (>=0.4,<0.6), tpt-kinetix, tpt-math, tpt-anima (optional feature), tpt-nova-drivers
+- [ ] Git deps on TPT-Solutions: tpt-nova (>=0.4,<0.6), tpt-kinetix, tpt-math, tpt-anima (optional feature), tpt-nova-drivers, tpt-strata
 - [ ] deny.toml: allow MIT/BSD-2/BSD-3/ISC/Zlib/BSL-1.0 (+Apache-2.0 only when dual with MIT); ban GPL/AGPL/LGPL/MPL/SSPL
 - [ ] CI: fmt, clippy, test, cargo-deny, Linux + Windows + macOS
 - [ ] vectis-domain.toml
@@ -55,14 +55,14 @@ License: MIT OR Apache-2.0 · (c) TPT Solutions · Edition 2024 · Determinism: 
 ## [ ] Layer 5: Datasets & Binding (tpt-nova-sim-datasets)
 - [ ] `TimeSeriesSource`, `DataBinding` components
 - [ ] `dataset_reader_driver`: CSV (MIT)
-- [ ] `dataset_reader_driver`: Parquet (custom/MIT-only parser)
+- [ ] `dataset_reader_driver`: tpt-strata (replaces Parquet; add as TPT-Solutions git dep)
 - [ ] ROS bag reader (stretch)
 - [ ] `dataset_stream_system` (async chunks)
 - [ ] `data_bind_system`
 - [ ] Synchronized multi-stream playback; HIL streaming demo
 
 ## [ ] Integration & Importers
-- [ ] Importers: urdf (quick-xml), point_cloud, parquet, rosbag, sensor_calibration
+- [ ] Importers: urdf (quick-xml), point_cloud, strata, rosbag, sensor_calibration
 - [ ] Facade crate re-exports + feature flags
 - [ ] End-to-end example sim
 
